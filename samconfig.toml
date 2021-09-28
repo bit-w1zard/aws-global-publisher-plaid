@@ -1,0 +1,35 @@
+version = 0.1
+
+[sandbox.deploy.parameters]
+stack_name = "link-dev-link-account"
+s3_prefix = "link/account"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+image_repositories = []
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-xyz"
+parameter_overrides = "Env=\"sandbox\",GlobalEventBus=\"arn:aws:events:us-east-1:xxxxx:event-bus/test_project-sandbox-global-queue\",OIDCIssuer=\"https://cognito-idp.us-east-1.amazonaws.com/us-east-xxxxx\""
+
+[dev.deploy.parameters]
+stack_name = "link-account"
+s3_prefix = "link/account"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+image_repositories = []
+parameter_overrides = "Env=\"dev\",GlobalEventBus=\"arn:aws:events:us-east-1:xxxxx:event-bus/test_project-sandbox-global-queue\",OIDCIssuer=\"https://cognito-idp.us-east-1.amazonaws.com/us-east-xxxxx\""
+
+[stg.deploy.parameters]
+stack_name = "link-account"
+s3_prefix = "link/account"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+image_repositories = []
+parameter_overrides = "Env=\"stg\",GlobalEventBus=\"arn:aws:events:us-east-1:xxxxx:event-bus/test_project-sdlc-global-queue\",OIDCIssuer=\"https://cognito-idp.us-east-1.amazonaws.com/us-east-xxxxx\""
+
+[prod.deploy.parameters]
+stack_name = "link-account"
+s3_prefix = "link/account"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+image_repositories = []
+parameter_overrides = "Env=\"prod\",GlobalEventBus=\"arn:aws:events:us-east-1:xxxxx:event-bus/test_project-prod-global-queue\",OIDCIssuer=\"https://cognito-idp.us-east-1.amazonaws.com/us-east-xxxxx\""
+

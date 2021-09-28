@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Processor
+
+Globals:
+  Function:
+    Timeout: 5
+    Runtime: nodejs16.x
+    Handler: app.handler
+    Tracing: Active
+
+Parameters:
+  Env:
+    Description: Deployment Environment
+    Type: String
+  EventsQueueArn:
+    Description: ARN of queue containing events
+    Type: String
+  AggregateTableName:
+    Description: Name of Aggregate Table
+    Type: String
+  ApiUrl:
+    Description: Url of the API
+    Type: String
+  AppSyncAPI:
+    Description: Id of the AppSync
+    Type: String
+  DependenciesLayer:
+    Description: Dependencies Layer
+    Type: String
+  Namespace:
+    Description: Namespace used as suffix for stack resources
+    Type: String
+
+Resources:
+  # Define the consumer Lambda function
+  Processor:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      MemorySize: 1024
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref EventsQueueArn
+            BatchSize: 10
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref AggregateTableName
+          API_URL: !Ref ApiUrl
+          PLAID: !Sub "{{resolve:secretsmanager:plaid-${Env}-plaid}}"
+          VGS: !Sub "{{resolve:secretsmanager:plaid-${Env}-vgs}}"
+
+      Policies:
+        ## Read more about SAM Policy templates at:
+        ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AggregateTableName
+
+      Layers:
+        - !Ref DependenciesLayer
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: false
+        EntryPoints:
+          - app.ts
+        External:
+          - "@test_project/serverless-library"
+          - "@test_project/link_account"
+
+Outputs:
+  Name:
+    Description: Processor function name
+    Value: !Ref Processor

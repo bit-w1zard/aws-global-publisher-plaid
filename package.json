@@ -1,0 +1,27 @@
+{
+  "name": "link-account",
+  "version": "0.0.0",
+  "main": "./index.tsx",
+  "types": "./index.tsx",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "processor/*"
+  ],
+  "scripts": {
+    "build": "sam build --beta-features",
+    "sync": "sam sync --stack-name plaid-account --config-env sandbox --watch",
+    "logs": "sam logs --stack-name plaid-account --tail",
+    "deploy": "yarn build && sam deploy --config-env sandbox",
+    "guided-deploy": "sam deploy --guided --config-env sandbox",
+    "delete-deploy": "sam delete --config-env sandbox",
+    "test": "jest",
+    "lint": "eslint ./",
+    "deploy-stack": "sam deploy --no-confirm-changeset --no-fail-on-empty-changeset"
+  },
+  "devDependencies": {
+    "jest": "*",
+    "jest-configs": "*",
+    "@test_project/plaid": "*"
+  }
+}

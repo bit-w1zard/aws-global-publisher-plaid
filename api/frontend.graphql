@@ -1,0 +1,10 @@
+mutation associateAccount($input: associateAccountInput!) {
+  associateAccount(account: $input) {
+    Records {
+      RecordId
+      ErrorMessage
+      ErrorCode
+    }
+    FailedRecords
+  }
+}

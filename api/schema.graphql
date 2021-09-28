@@ -1,0 +1,31 @@
+type RecordDetails {
+  RecordId: String
+  ErrorMessage: String
+  ErrorCode: String
+}
+
+input associateAccountInput {
+  userId: String
+  entityId: String
+  publicToken: String
+  accountUse: String
+  nickname: String
+}
+
+type Mutation {
+  associateAccount(account: associateAccountInput!): Result
+}
+
+type Result {
+  Entries: [RecordDetails]
+  FailedEntries: Int
+}
+
+type Query {
+  ping: String @deprecated(reason: "https://stackoverflow.com/questions/59868942/graphql-a-schema-must-have-a-query-operation-defined")
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}
