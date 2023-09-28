@@ -15,3 +15,6 @@ This codebase includes set of lambda functions, one of which is ```global-publis
 ## Configurations
 All the configurations are setup using SAM template configurations. Each resource used is deployed using stacks
 as per configuration defined in ```samconfig.toml``` file.
+
+## Testing
+Test cases written in Jest and TypeScript are also provided ofr the processor lambda.
