@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Global stream
+
+Globals:
+  Function:
+    Timeout: 5
+    Runtime: nodejs16.x
+    Handler: app.handler
+    Tracing: Active
+
+Parameters:
+  StreamArn:
+    Description: Arn of Aggregate Table Stream
+    Type: String
+  DependenciesLayer:
+    Description: Dependencies Layer
+    Type: String
+  Namespace:
+    Description: Namespace used as suffix for stack resources
+    Type: String
+  EventBus:
+    Description: Name of Event Bus
+    Type: String
+
+Resources:
+  # Define the consumer Lambda function
+  GlobalPublisher:
+    Type: AWS::Serverless::Function
+    Properties:
+      Environment:
+        Variables:
+          GLOBAL_BUS_ARN: !Ref EventBus
+      CodeUri: src/
+      MemorySize: 1024
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !Ref StreamArn
+            BatchSize: 100
+            StartingPosition: TRIM_HORIZON
+      Policies:
+        ## Read more about SAM Policy templates at:
+        ## https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !Ref EventBus
+      Layers:
+        - !Ref DependenciesLayer
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: false
+        EntryPoints:
+          - app.ts
+        External:
+          - "@test_project/serverless-library"
+          - "aws-sdk"
+
+Outputs:
+  Name:
+    Description: GlobalPublisher function name
+    Value: !Ref GlobalPublisher

@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Link Account Dataflow
+
+Transform:
+  - AWS::Serverless-2016-10-31
+  - Name: DatadogServerless
+    Parameters:
+      stackName: !Ref "AWS::StackName"
+      nodeLayerVersion: 83
+      extensionLayerVersion: 28
+      site: "datadoghq.com"
+      apiKey: "{{resolve:secretsmanager:dev/DataDog}}"
+      service: "link-account"
+      env: "development"
+
+Parameters:
+  Env:
+    Description: Deployment Environment
+    Type: String
+  GlobalEventBus:
+    Type: String
+    Description: Global Event Bus Arn
+    Default: "Nothing"
+  OIDCIssuer:
+    Type: String
+    Description: OIDC Issuer Url
+    Default: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_77Fcn5MHM"
+
+Resources:
+  Api:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./api/template.yml
+      Parameters:
+        Namespace: !Ref "AWS::StackName"
+        EventSource: !GetAtt LocalEvents.Outputs.EventSource
+        EventName: !GetAtt LocalEvents.Outputs.EventName
+        EventBusName: !GetAtt LocalEvents.Outputs.EventBusName
+        EventBusArn: !GetAtt LocalEvents.Outputs.EventBusArn
+        AggregateTableName: !GetAtt AggregateTable.Outputs.TableName
+        AggregateTableArn: !GetAtt AggregateTable.Outputs.TableArn
+        OIDCIssuer: !Ref OIDCIssuer
+
+  LocalEvents: # local
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./events/template.yml
+      Parameters:
+        Namespace: !Ref "AWS::StackName"
+        EventSource: "Link"
+        EventName: "LinkAccount"
+
+  DependencyLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: dependency-layer
+      Description: Serverless NPM package
+      ContentUri: ../common-deps
+      CompatibleRuntimes:
+        - nodejs16.x
+      RetentionPolicy: Retain
+
+  Processor:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./processor/template.yml
+      Parameters:
+        Env: !Ref Env
+        Namespace: !Ref "AWS::StackName"
+        EventsQueueArn: !GetAtt LocalEvents.Outputs.QueueArn
+        AggregateTableName: !GetAtt AggregateTable.Outputs.TableName
+        ApiUrl: !GetAtt Api.Outputs.ApiUrl
+        AppSyncAPI: !GetAtt Api.Outputs.AppSyncAPI
+        DependenciesLayer: !Ref DependencyLayer
+
+  AggregateTable:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./aggregate-table/template.yml
+
+  GlobalPublisher:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./global-publisher/template.yml
+      Parameters:
+        Namespace: !Ref "AWS::StackName"
+        StreamArn: !GetAtt AggregateTable.Outputs.StreamArn
+        DependenciesLayer: !Ref DependencyLayer
+        EventBus: !Ref GlobalEventBus
+
+Outputs:
+  ApiUrl:
+    Description: "The GraphQL endpoint"
+    Value: !GetAtt Api.Outputs.ApiUrl
+  LocalEventsQueue:
+    Description: SNS queue name
+    Value: !GetAtt LocalEvents.Outputs.QueueName
+  Processor:
+    Description: Name of processor lambda
+    Value: !GetAtt Processor.Outputs.Name

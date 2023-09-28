@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Events
+
+Transform:
+  - AWS::Serverless-2016-10-31
+
+Parameters:
+  Namespace:
+    Description: Namespace used as suffix for stack resources
+    Type: String
+  EventSource:
+    Description: Event source name
+    Type: String
+  EventName:
+    Description: Unique name of event
+    Type: String
+
+Resources:
+  # EventBus local
+  LocalEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub ${EventName}-${Namespace}
+
+  # Define the SQS queue
+  LocalQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${EventName}Queue-${Namespace}
+      MessageRetentionPeriod: 864000
+      VisibilityTimeout: 180
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt LocalQueueDLQ.Arn
+        maxReceiveCount: 5
+
+  LocalQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${EventName}QueueDLQ-${Namespace}
+      MessageRetentionPeriod: 864000
+
+  # Define the events rule to filter for events
+  LocalQueueEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Insert transactions"
+      EventBusName: !GetAtt LocalEventBus.Arn
+      EventPattern:
+        source:
+          - !Ref EventSource
+        detail-type:
+          - !Sub ${EventName}
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt LocalQueue.Arn
+          Id: "SQSqueue"
+
+  # Allow EventBridge to invoke SQS
+  EventBridgeToToSqsPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: SQS:SendMessage
+            Resource: !GetAtt LocalQueue.Arn
+      Queues:
+        - Ref: LocalQueue
+
+Outputs:
+  EventBusName:
+    Description: Local event bus name
+    Value: !Ref LocalEventBus
+  EventBusArn:
+    Description: Local event bus arn
+    Value: !GetAtt LocalEventBus.Arn
+  EventSource:
+    Description: Event source name
+    Value: !Ref EventSource
+  EventName:
+    Description: Event name
+    Value: !Ref EventName
+  QueueName:
+    Description: SNS queue name
+    Value: !GetAtt LocalQueue.QueueName
+  QueueArn:
+    Description: SQS queue ARN
+    Value: !GetAtt LocalQueue.Arn
+  QueueURL:
+    Description: SQS queue URL
+    Value: !Ref LocalQueue

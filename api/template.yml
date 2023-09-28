@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Api
+
+Transform:
+  - AWS::Serverless-2016-10-31
+
+Parameters:
+  Namespace:
+    Description: Namespace used as suffix for stack resources
+    Type: String
+  EventSource:
+    Description: Owner of event emitted to EventBridge
+    Type: String
+  EventName:
+    Description: Unique name of event
+    Type: String
+  EventBusName:
+    Description: Name of local event bus
+    Type: String
+  EventBusArn:
+    Description: Arn of local event bus
+    Type: String
+  AggregateTableName:
+    Description: Aggregate Table Name
+    Type: String
+  AggregateTableArn:
+    Description: Aggregate Table Arn
+    Type: String
+  OIDCIssuer:
+    Description: OIDC Issuer url
+    Type: String
+
+Resources:
+  # Roles
+  AppSyncServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EventSource}ApiRole-${Namespace}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${EventSource}ApiRolePolicy-${Namespace}
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource: !Ref EventBusArn
+        - PolicyName: !Sub ${EventSource}DDBAccessPolicy-${Namespace}
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Ref AggregateTableArn
+                  - !Sub ${AggregateTableArn}/index/*
+  AppSyncCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSAppSyncPushToCloudWatchLogs'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - appsync.amazonaws.com
+  # Data Sources
+  MutationEventDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: !Sub ${EventName}MutationDataSource
+      Type: HTTP
+      ServiceRoleArn: !GetAtt AppSyncServiceRole.Arn
+      HttpConfig:
+        Endpoint: !Sub https://events.${AWS::Region}.amazonaws.com/
+        AuthorizationConfig:
+          AuthorizationType: AWS_IAM
+          AwsIamConfig:
+            SigningRegion: !Ref AWS::Region
+            SigningServiceName: events
+
+  # Resolvers
+  AssociateAccountResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      FieldName: associateAccount
+      TypeName: Mutation
+      DataSourceName: !GetAtt MutationEventDataSource.Name
+      RequestMappingTemplate: !Sub |
+        {
+          "version": "2018-05-29",
+          "method": "POST",
+          "resourcePath": "/",
+          "params": {
+            "headers": {
+              "content-type": "application/x-amz-json-1.1",
+              "x-amz-target":"AWSEvents.PutEvents"
+            },
+            "body": {
+              "Entries":[
+                {
+                  "Source": "${EventSource}",
+                  "EventBusName": "${EventBusName}",
+                  "Detail": "{\"correlationId\": \"$!{ctx.request.headers.get('x-correlation-id')}\", \"event\": {\"account\": {\"userId\":\"$ctx.arguments.account.userId\",\"publicToken\":\"$ctx.arguments.account.publicToken\",\"accountUse\":\"$ctx.arguments.account.accountUse\",\"nickname\":\"$ctx.arguments.account.nickname\"}, \"type\": \"create\"}}",
+                  "DetailType": "${EventName}"
+                }
+              ]
+            }
+          }
+        }
+      ResponseMappingTemplate: |
+        ## Raise a GraphQL field error in case of a datasource invocation error
+        #if($ctx.error)
+          $util.error($ctx.error.message, $ctx.error.type)
+        #end
+        ## if the response status code is not 200, then return an error. Else return the body **
+        #if($ctx.result.statusCode == 200)
+          ## If response is 200, return the body.
+          $ctx.result.body
+        #else
+          ## If response is not 200, append the response to error block.
+          $utils.appendError($ctx.result.body, $ctx.result.statusCode)
+        #end
+
+  # Api
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub ${EventSource}Api-${Namespace}
+      AuthenticationType: OPENID_CONNECT
+      OpenIDConnectConfig:
+        Issuer: !Ref OIDCIssuer
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: AWS_IAM
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt AppSyncCloudWatchRole.Arn
+        ExcludeVerboseContent: false
+        FieldLogLevel: ERROR
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      DefinitionS3Location: './schema.graphql'
+
+Outputs:
+  ApiUrl:
+    Description: 'The GraphQL endpoint'
+    Value: !GetAtt GraphQLApi.GraphQLUrl
+  AppSyncAPI:
+    Description: 'The AppSync ID'
+    Value: !Ref GraphQLApi

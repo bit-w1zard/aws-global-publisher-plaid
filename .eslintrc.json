@@ -1,0 +1,20 @@
+{
+  "extends": ["../../.eslintrc.js"],
+  "ignorePatterns": ["!**/*", ".turbo/*", ".aws-sam/*"],
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx", "*.js", "*.jsx"],
+      "rules": {
+        "turbo/no-undeclared-env-vars": "off"
+      }
+    },
+    {
+      "files": ["*.ts", "*.tsx"],
+      "rules": {}
+    },
+    {
+      "files": ["*.js", "*.jsx"],
+      "rules": {}
+    }
+  ]
+}
